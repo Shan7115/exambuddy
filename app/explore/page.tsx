@@ -277,6 +277,33 @@ export default function ExploreTravelPage() {
                   ))}
                 </div>
               )}
+
+              {/* Quick Select Center Chips */}
+              <div className="mt-3">
+                <span className="text-[11px] font-medium text-[#6E6E73] block mb-1.5">
+                  Or select a supported exam center:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {CANONICAL_EXAM_CENTERS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setCenterInput(c.name);
+                        setShowSuggestions(false);
+                        handleSearch(undefined, c.name);
+                      }}
+                      className={`text-[12px] px-3 py-1 rounded-full border transition-all ${
+                        centerInput === c.name
+                          ? "bg-[#0071E3] text-white border-[#0071E3] shadow-xs"
+                          : "bg-[#F5F5F7] hover:bg-[#E8E8ED] text-[#1D1D1F] border-[#D2D2D7]/60"
+                      }`}
+                    >
+                      {c.shortName}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* Date & Session */}
