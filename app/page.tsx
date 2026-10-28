@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { HeroConvergence } from "@/components/HeroConvergence";
 import { SignInSheet } from "@/components/SignInSheet";
+import { ResetDemoModal } from "@/components/ResetDemoModal";
 import {
   FileText,
   Users2,
@@ -14,6 +15,7 @@ import {
   MapPin,
   Clock,
   Sparkles,
+  RotateCcw,
 } from "lucide-react";
 import { CANONICAL_EXAM_CENTERS, SAMPLE_PRESENTERS } from "@/lib/constants/demo-data";
 import type { SessionUser } from "@/lib/auth/session";
@@ -22,6 +24,7 @@ export default function LandingPage() {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const [isResetOpen, setIsResetOpen] = useState(false);
   const [loadingUser, setLoadingUser] = useState(true);
 
   // Check current session
@@ -310,10 +313,19 @@ export default function LandingPage() {
             <div className="font-semibold text-[#1D1D1F]">ExamBuddy</div>
             <div>Karunya Institute of Technology and Sciences • Karunya Nagar, Coimbatore 641114</div>
           </div>
-          <div className="flex items-center gap-6 text-[13px]">
+          <div className="flex items-center gap-4 text-[13px] flex-wrap">
             <span>NPTEL 2026 Session</span>
             <span>•</span>
             <span>AI Multi-Agent Architecture</span>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => setIsResetOpen(true)}
+              className="inline-flex items-center gap-1 text-[#6E6E73] hover:text-[#0071E3] transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Demo</span>
+            </button>
           </div>
         </div>
       </footer>
@@ -325,6 +337,16 @@ export default function LandingPage() {
         onSuccess={(signedInUser) => {
           setUser(signedInUser);
           router.push("/dashboard");
+        }}
+      />
+
+      {/* Reset Demo Modal */}
+      <ResetDemoModal
+        isOpen={isResetOpen}
+        onClose={() => setIsResetOpen(false)}
+        onResetComplete={() => {
+          setIsResetOpen(false);
+          window.location.reload();
         }}
       />
     </div>

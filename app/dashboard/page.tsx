@@ -493,6 +493,14 @@ export default function DashboardPage() {
           </Link>
         )}
 
+        <Link
+          href="/activity"
+          className="flex flex-col items-center py-1 text-[#6E6E73] hover:text-[#1D1D1F] min-h-[44px] min-w-[44px] justify-center"
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[10px] font-medium mt-0.5">Agents</span>
+        </Link>
+
         <button
           type="button"
           onClick={handleSignOut}
