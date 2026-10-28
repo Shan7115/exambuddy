@@ -162,6 +162,15 @@ export async function runMatchingAgent(
     "done"
   );
 
+  // 7. Coordinator Agent posts squad welcome & updated split
+  try {
+    const { handleMembershipChange } = await import("./coordinator-agent");
+    const currentMember = members.find((m) => m.id === userId);
+    await handleMembershipChange(groupId, currentMember?.firstName);
+  } catch (coordErr) {
+    console.error("Coordinator notification error:", coordErr);
+  }
+
   return {
     success: true,
     groupId,
