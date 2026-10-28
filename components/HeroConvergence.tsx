@@ -56,13 +56,24 @@ const AVATARS: AvatarData[] = [
 export function HeroConvergence() {
   const shouldReduceMotion = useReducedMotion();
   const [converged, setConverged] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const timer = setTimeout(() => {
       setConverged(true);
     }, 1800);
     return () => clearTimeout(timer);
   }, []);
+
+  if (!mounted) {
+    return (
+      <div
+        className="relative w-full max-w-xl mx-auto h-[260px] sm:h-[300px] my-6"
+        aria-label="Student travel group convergence diagram"
+      />
+    );
+  }
 
   return (
     <div
@@ -151,7 +162,7 @@ export function HeroConvergence() {
           <Check className="w-2.5 h-2.5 stroke-[3]" />
         </div>
         <span className="text-[12px] font-medium text-[#1D1D1F]">
-          Group formed • Meetup 06:45 AM • ₹400 / person
+          Group formed • Meetup 06:45 AM • Ready to go together
         </span>
       </motion.div>
     </div>

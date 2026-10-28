@@ -23,11 +23,13 @@ import type { SessionUser } from "@/lib/auth/session";
 import type { ExtractedFields, IntakeResult } from "@/lib/agents/intake-agent";
 import { BarcodeValidationBadge, type BarcodeStatus } from "@/components/BarcodeValidationBadge";
 import { decodeBarcodeFromImage, isBarcodeValidationEnabled } from "@/lib/barcode/zxing";
+import { SignInSheet } from "@/components/SignInSheet";
 
 export default function TicketUploadPage() {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
 
   // File state
   const [file, setFile] = useState<File | null>(null);
@@ -75,13 +77,11 @@ export default function TicketUploadPage() {
           setUser(data.user);
           setStudentName(data.user.name || "");
           setRegisterNo(data.user.registerNo || "");
-        } else {
-          router.push("/");
         }
       })
-      .catch(() => router.push("/"))
+      .catch(() => {})
       .finally(() => setLoadingUser(false));
-  }, [router]);
+  }, []);
 
   // Handle file select
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,7 +251,7 @@ export default function TicketUploadPage() {
     }
   };
 
-  if (loadingUser || !user) {
+  if (loadingUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FBFBFD]">
         <Loader2 className="w-8 h-8 text-[#0071E3] animate-spin" />
@@ -259,9 +259,58 @@ export default function TicketUploadPage() {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#FBFBFD] text-[#1D1D1F]">
+        <Navbar
+          user={null}
+          onOpenSignIn={() => setIsSignInOpen(true)}
+          onSignOut={() => router.push("/")}
+        />
+        <main className="flex-1 flex items-center justify-center px-4 py-16">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-[#D2D2D7]/60 shadow-sm text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto mb-4">
+              <FileUp className="w-6 h-6" />
+            </div>
+            <h2 className="text-[20px] font-semibold text-[#1D1D1F] mb-2">
+              Sign in to upload your ticket
+            </h2>
+            <p className="text-[14px] text-[#6E6E73] mb-6">
+              Enter your Karunya student credentials to verify and associate your exam details.
+            </p>
+            <button
+              onClick={() => setIsSignInOpen(true)}
+              className="w-full min-h-[44px] px-6 py-2.5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-[15px] shadow-sm transition-all"
+            >
+              Sign in
+            </button>
+          </div>
+        </main>
+        <SignInSheet
+          isOpen={isSignInOpen}
+          onClose={() => setIsSignInOpen(false)}
+          onSuccess={(signedIn) => {
+            setUser(signedIn);
+            setStudentName(signedIn.name || "");
+            setRegisterNo(signedIn.registerNo || "");
+            setIsSignInOpen(false);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-[#FBFBFD] text-[#1D1D1F]">
-      <Navbar user={user} onOpenSignIn={() => {}} onSignOut={() => router.push("/")} />
+      <Navbar
+        user={user}
+        onOpenSignIn={() => setIsSignInOpen(true)}
+        onSignOut={async () => {
+          await fetch("/api/auth/signout", { method: "POST" });
+          setUser(null);
+          router.push("/");
+        }}
+      />
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12">
         {/* Navigation Breadcrumb */}
@@ -754,6 +803,17 @@ export default function TicketUploadPage() {
           </div>
         </div>
       </main>
+
+      <SignInSheet
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        onSuccess={(signedIn) => {
+          setUser(signedIn);
+          setStudentName(signedIn.name || "");
+          setRegisterNo(signedIn.registerNo || "");
+          setIsSignInOpen(false);
+        }}
+      />
     </div>
   );
 }

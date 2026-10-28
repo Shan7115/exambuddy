@@ -131,6 +131,12 @@ function GroupRoomContent() {
     scrollToBottom(false);
   }, [messages.length, scrollToBottom]);
 
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  const membersRef = useRef(members);
+  membersRef.current = members;
+
   // Realtime subscription + 2-second polling fallback on messages & membership
   useEffect(() => {
     const channel = supabaseClient
@@ -148,14 +154,16 @@ function GroupRoomContent() {
           setMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
 
-            const isCurrent = user ? newMsg.user_id === user.userId : false;
+            const currentUser = userRef.current;
+            const currentMembers = membersRef.current;
+            const isCurrent = currentUser ? newMsg.user_id === currentUser.userId : false;
             let senderName = "Classmate";
             if (newMsg.is_bot) {
               senderName = "System";
             } else if (isCurrent) {
-              senderName = user?.name.split(" ")[0] || "You";
+              senderName = currentUser?.name.split(" ")[0] || "You";
             } else {
-              const matchedMember = members.find((m) => m.id === newMsg.user_id);
+              const matchedMember = currentMembers.find((m) => m.id === newMsg.user_id);
               if (matchedMember) senderName = matchedMember.firstName;
             }
 
@@ -211,8 +219,23 @@ function GroupRoomContent() {
         const res = await fetch(`/api/groups/${groupId}`);
         if (res.ok) {
           const data = await res.json();
-          setGroup(data.group);
-          setMembers(data.members || []);
+          setGroup((prev) => {
+            if (
+              prev?.meetup_point === data.group?.meetup_point &&
+              prev?.meetup_time === data.group?.meetup_time &&
+              prev?.memberCount === data.group?.memberCount
+            ) {
+              return prev;
+            }
+            return data.group;
+          });
+          setMembers((prev) => {
+            const nextM = data.members || [];
+            if (prev.length === nextM.length && prev.every((m, i) => m.id === nextM[i]?.id)) {
+              return prev;
+            }
+            return nextM;
+          });
           setMessages((prev) => {
             if (data.messages?.length > prev.length) {
               return data.messages;
@@ -229,7 +252,7 @@ function GroupRoomContent() {
       supabaseClient.removeChannel(channel);
       clearInterval(pollInterval);
     };
-  }, [groupId, user, members, loadGroupData, scrollToBottom]);
+  }, [groupId, loadGroupData, scrollToBottom]);
 
   // Handle Send Message (Optimistic UI)
   const handleSendMessage = async (e?: React.FormEvent) => {

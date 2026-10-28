@@ -239,7 +239,8 @@ export default function LandingPage() {
         onClose={() => setIsResetOpen(false)}
         onResetComplete={() => {
           setIsResetOpen(false);
-          window.location.reload();
+          setUser(null);
+          router.push("/");
         }}
       />
     </div>

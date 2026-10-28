@@ -20,6 +20,7 @@ import {
   DoorOpen,
   Sparkles,
 } from "lucide-react";
+import { SignInSheet } from "@/components/SignInSheet";
 import type { SessionUser } from "@/lib/auth/session";
 
 interface MemberItem {
@@ -66,6 +67,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [isStartingGroup, setIsStartingGroup] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -76,7 +78,7 @@ export default function DashboardPage() {
     try {
       const res = await fetch("/api/dashboard");
       if (res.status === 401) {
-        router.push("/");
+        setData(null);
         return;
       }
       const json = await res.json();
@@ -86,7 +88,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     loadDashboard();
@@ -178,13 +180,53 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FBFBFD]">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-[#0071E3] animate-spin" />
           <span className="text-[14px] text-[#6E6E73] font-medium">Loading your trip...</span>
         </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#FBFBFD] text-[#1D1D1F]">
+        <Navbar
+          user={null}
+          onOpenSignIn={() => setIsSignInOpen(true)}
+          onSignOut={() => router.push("/")}
+        />
+        <main className="flex-1 flex items-center justify-center px-4 py-16">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-[#D2D2D7]/60 shadow-sm text-center">
+            <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto mb-4">
+              <Compass className="w-6 h-6" />
+            </div>
+            <h2 className="text-[20px] font-semibold text-[#1D1D1F] mb-2">
+              Sign in to view your trip
+            </h2>
+            <p className="text-[14px] text-[#6E6E73] mb-6">
+              Enter your Karunya student email and OTP to access your trip details and coordination group.
+            </p>
+            <button
+              onClick={() => setIsSignInOpen(true)}
+              className="w-full min-h-[44px] px-6 py-2.5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-[15px] shadow-sm transition-all"
+            >
+              Sign in
+            </button>
+          </div>
+        </main>
+        <SignInSheet
+          isOpen={isSignInOpen}
+          onClose={() => setIsSignInOpen(false)}
+          onSuccess={() => {
+            setIsSignInOpen(false);
+            setLoading(true);
+            loadDashboard();
+          }}
+        />
       </div>
     );
   }
@@ -197,7 +239,11 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FBFBFD] text-[#1D1D1F] pb-24 md:pb-12">
-      <Navbar user={user} onOpenSignIn={() => {}} onSignOut={handleSignOut} />
+      <Navbar
+        user={user}
+        onOpenSignIn={() => setIsSignInOpen(true)}
+        onSignOut={handleSignOut}
+      />
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10 space-y-8">
         {/* Top Header */}
@@ -528,6 +574,16 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      <SignInSheet
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        onSuccess={() => {
+          setIsSignInOpen(false);
+          setLoading(true);
+          loadDashboard();
+        }}
+      />
     </div>
   );
 }

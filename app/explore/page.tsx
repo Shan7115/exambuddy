@@ -22,6 +22,7 @@ import {
   CANONICAL_EXAM_CENTERS,
   DEFAULT_EXAM_DATE,
 } from "@/lib/constants/demo-data";
+import { SignInSheet } from "@/components/SignInSheet";
 import type { SessionUser } from "@/lib/auth/session";
 
 interface MatchedStudent {
@@ -47,6 +48,7 @@ export default function ExploreTravelPage() {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
 
   // Form states
   const [centerInput, setCenterInput] = useState("");
@@ -73,13 +75,11 @@ export default function ExploreTravelPage() {
       .then((data) => {
         if (data.authenticated && data.user) {
           setUser(data.user);
-        } else {
-          router.push("/");
         }
       })
-      .catch(() => router.push("/"))
+      .catch(() => {})
       .finally(() => setLoadingUser(false));
-  }, [router]);
+  }, []);
 
   // Execute search
   const handleSearch = async (e?: React.FormEvent, overrideCenter?: string) => {
@@ -120,6 +120,10 @@ export default function ExploreTravelPage() {
 
   // Start group for this center & date
   const handleStartGroup = async () => {
+    if (!user) {
+      setIsSignInOpen(true);
+      return;
+    }
     if (!centerInput.trim()) return;
     setIsStartingGroup(true);
     setErrorMsg(null);
@@ -150,6 +154,10 @@ export default function ExploreTravelPage() {
 
   // Join group
   const handleJoinGroup = async (groupId: string) => {
+    if (!user) {
+      setIsSignInOpen(true);
+      return;
+    }
     setJoiningGroupId(groupId);
     setErrorMsg(null);
 
@@ -171,7 +179,7 @@ export default function ExploreTravelPage() {
     }
   };
 
-  if (loadingUser || !user) {
+  if (loadingUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FBFBFD]">
         <Loader2 className="w-8 h-8 text-[#0071E3] animate-spin" />
@@ -186,7 +194,14 @@ export default function ExploreTravelPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FBFBFD] text-[#1D1D1F]">
-      <Navbar user={user} onOpenSignIn={() => {}} onSignOut={() => router.push("/")} />
+      <Navbar
+        user={user}
+        onOpenSignIn={() => setIsSignInOpen(true)}
+        onSignOut={async () => {
+          await fetch("/api/auth/signout", { method: "POST" });
+          setUser(null);
+        }}
+      />
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 space-y-8">
         {/* Navigation Breadcrumb */}
@@ -459,6 +474,16 @@ export default function ExploreTravelPage() {
           </div>
         )}
       </main>
+
+      {/* Sign-in Sheet Dialog */}
+      <SignInSheet
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        onSuccess={(signedInUser) => {
+          setUser(signedInUser);
+          setIsSignInOpen(false);
+        }}
+      />
     </div>
   );
 }

@@ -106,8 +106,9 @@ export function Navbar({ user, onOpenSignIn, onSignOut, onResetComplete }: Navba
         onClose={() => setIsResetOpen(false)}
         onResetComplete={() => {
           setIsResetOpen(false);
-          if (onResetComplete) onResetComplete();
-          window.location.reload();
+          if (onResetComplete) {
+            onResetComplete();
+          }
         }}
       />
     </>
