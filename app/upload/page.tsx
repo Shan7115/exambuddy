@@ -29,6 +29,8 @@ import {
 } from "@/lib/constants/demo-data";
 import type { SessionUser } from "@/lib/auth/session";
 import type { ExtractedTicket } from "@/lib/agents/intake-agent";
+import { BarcodeValidationBadge, type BarcodeStatus } from "@/components/BarcodeValidationBadge";
+import { decodeBarcodeFromImage, isBarcodeValidationEnabled } from "@/lib/barcode/zxing";
 
 interface AgentStep {
   id: string;
@@ -52,6 +54,10 @@ export default function TicketUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedSampleFile, setSelectedSampleFile] = useState<string | null>(null);
+
+  // Barcode validation state
+  const [barcodeStatus, setBarcodeStatus] = useState<BarcodeStatus>("idle");
+  const [decodedBarcode, setDecodedBarcode] = useState<string | null>(null);
 
   // Processing & Agent steps
   const [isProcessing, setIsProcessing] = useState(false);
@@ -124,6 +130,32 @@ export default function TicketUploadPage() {
       { id: "3", label: "Mapping to Coimbatore canonical exam centers", status: "waiting" },
       { id: "4", label: "Verifying student credentials against signed-in account", status: "waiting" },
     ]);
+
+    // Run Barcode validation if enabled
+    if (isBarcodeValidationEnabled() && previewUrl) {
+      setBarcodeStatus("scanning");
+      decodeBarcodeFromImage(previewUrl)
+        .then(({ text }) => {
+          if (text) {
+            setDecodedBarcode(text);
+            const cleanExpected = user?.registerNo ? user.registerNo.toUpperCase().trim() : "";
+            if (
+              cleanExpected &&
+              (text.toUpperCase().includes(cleanExpected) ||
+                cleanExpected.includes(text.toUpperCase()))
+            ) {
+              setBarcodeStatus("matched");
+            } else {
+              setBarcodeStatus("unverified");
+            }
+          } else {
+            setBarcodeStatus("unverified");
+          }
+        })
+        .catch(() => {
+          setBarcodeStatus("unverified");
+        });
+    }
 
     try {
       // Step 1 animation tick
@@ -570,6 +602,17 @@ export default function TicketUploadPage() {
                   <div className="mb-5 rounded-2xl bg-red-50 border border-red-200 p-3.5 text-[13px] text-red-900 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-[#FF3B30] shrink-0" />
                     <span>{confirmError}</span>
+                  </div>
+                )}
+
+                {/* Optional Barcode Validation Badge */}
+                {barcodeStatus !== "idle" && (
+                  <div className="mb-5">
+                    <BarcodeValidationBadge
+                      status={barcodeStatus}
+                      decodedValue={decodedBarcode}
+                      expectedRegisterNo={user.registerNo}
+                    />
                   </div>
                 )}
 
