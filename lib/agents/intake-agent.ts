@@ -1,356 +1,311 @@
 import { getGeminiClient, getGeminiModelName } from "./gemini";
 import { matchToCanonicalCenter } from "./center-matcher";
-import { getAdminSupabase } from "@/lib/supabase/admin";
-import { DEFAULT_EXAM_DATE, type CanonicalCenter } from "@/lib/constants/demo-data";
+import { type CanonicalCenter } from "@/lib/constants/demo-data";
+import { SchemaType } from "@google/generative-ai";
 
-export interface ExtractedTicket {
-  name: string;
-  registerNo: string;
-  courseName: string;
-  courseCode: string;
-  examCenter: string;
-  canonicalCenter: CanonicalCenter;
-  city: string;
-  examDate: string;
-  session: "Forenoon" | "Afternoon";
-  reportingTime: string;
-  gateCloses: string;
-  rawJson?: Record<string, unknown>;
+export interface ExtractedFields {
+  name: string | null;
+  registerNumber: string | null;
+  courseName: string | null;
+  courseCode: string | null;
+  examCenter: string | null;
+  examDate: string | null;
+  session: "forenoon" | "afternoon" | null;
 }
 
 export interface IntakeResult {
   success: boolean;
-  extracted?: ExtractedTicket;
+  extracted?: ExtractedFields & {
+    canonicalCenter?: CanonicalCenter | null;
+  };
+  rawTranscript?: string;
+  rawJson?: Record<string, any> | null;
   isMismatch?: boolean;
   mismatchReason?: string;
-  fallbackUsed?: boolean;
   error?: string;
 }
 
 /**
- * Log an event to agent_events table
+ * Normalizes an exam date string into ISO YYYY-MM-DD
  */
-async function logAgentEvent(
-  userId: string,
-  message: string,
-  status: "running" | "done" | "failed"
-) {
-  try {
-    const supabase = getAdminSupabase();
-    await supabase.from("agent_events").insert({
-      user_id: userId,
-      agent: "Intake agent",
-      message,
-      status,
-    });
-  } catch (e) {
-    console.error("Failed to log agent event:", e);
+export function normalizeDateToIso(dateStr: string | null | undefined): string | null {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const clean = dateStr.trim();
+
+  // Pattern YYYY-MM-DD
+  const isoMatch = clean.match(/\b(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   }
-}
 
-/**
- * Helper to extract fields directly from SVG markup
- */
-function extractFromSvgText(svgContent: string): Partial<ExtractedTicket> | null {
-  try {
-    // Check for roll number pattern
-    const regMatch = svgContent.match(/URK\d{2}[A-Z]{2}\d{4}/i);
-    const registerNo = regMatch ? regMatch[0].toUpperCase() : undefined;
-
-    // Course title match
-    let courseName: string | undefined;
-    const courseMatch = svgContent.match(
-      /<text[^>]*font-weight="700"[^>]*>([A-Za-z0-9\s,:.-]+)<\/text>/g
-    );
-    if (courseMatch) {
-      for (const m of courseMatch) {
-        const text = m.replace(/<[^>]+>/g, "").trim();
-        if (
-          text.includes("Cloud") ||
-          text.includes("Natural Language") ||
-          text.includes("Deep Learning") ||
-          text.includes("Robotics") ||
-          text.includes("Systems") ||
-          text.includes("Processing")
-        ) {
-          courseName = text;
-          break;
-        }
-      }
-    }
-
-    // Name match
-    let name: string | undefined;
-    const nameMatch = svgContent.match(/Candidate Name:[\s\S]*?<text[^>]*>([A-Za-z\s]+)<\/text>/i);
-    if (nameMatch && nameMatch[1]) {
-      name = nameMatch[1].trim();
-    }
-
-    // Exam center match
-    let examCenter: string | undefined;
-    if (svgContent.includes("Kovai Pudur")) {
-      examCenter = "iON Digital Zone iDZ Kovai Pudur";
-    } else if (svgContent.includes("KGiSL")) {
-      examCenter = "KGiSL Institute of Technology, Saravanampatti";
-    } else if (svgContent.includes("Krishna") || svgContent.includes("SKCET")) {
-      examCenter = "Sri Krishna College of Engineering and Technology (SKCET), Kuniamuthur";
-    }
-
-    // Session match
-    let session: "Forenoon" | "Afternoon" | undefined;
-    if (svgContent.includes("Afternoon")) {
-      session = "Afternoon";
-    } else if (svgContent.includes("Forenoon")) {
-      session = "Forenoon";
-    }
-
-    if (registerNo || examCenter || courseName) {
-      return {
-        name,
-        registerNo,
-        courseName,
-        examCenter,
-        session,
-        examDate: DEFAULT_EXAM_DATE,
-      };
-    }
-  } catch (e) {
-    console.error("Error parsing SVG text:", e);
+  // Pattern DD-MM-YYYY
+  const dmyMatch = clean.match(/\b(0[1-9]|[12]\d|3[01])[-/](0[1-9]|1[0-2])[-/](20\d{2})\b/);
+  if (dmyMatch) {
+    return `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
   }
+
+  // Fallback to JS Date parse
+  const parsed = Date.parse(clean);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    if (y >= 2024 && y <= 2030) {
+      return `${y}-${m}-${day}`;
+    }
+  }
+
   return null;
 }
 
 /**
- * Runs the Intake Agent using Gemini Vision
+ * Normalizes session string into "forenoon" or "afternoon"
+ * Maps 9:00 AM / FN -> "forenoon", 2:00 PM / AN -> "afternoon"
+ */
+export function normalizeSession(sessionStr: string | null | undefined): "forenoon" | "afternoon" | null {
+  if (!sessionStr || typeof sessionStr !== "string") return null;
+  const lower = sessionStr.toLowerCase();
+
+  if (
+    lower.includes("afternoon") ||
+    lower.includes("an") ||
+    lower.includes("02:00") ||
+    lower.includes("2:00") ||
+    lower.includes("2 pm") ||
+    lower.includes("14:00")
+  ) {
+    return "afternoon";
+  }
+
+  if (
+    lower.includes("forenoon") ||
+    lower.includes("fn") ||
+    lower.includes("09:00") ||
+    lower.includes("9:00") ||
+    lower.includes("9 am") ||
+    lower.includes("07:30") ||
+    lower.includes("morning")
+  ) {
+    return "forenoon";
+  }
+
+  return null;
+}
+
+/**
+ * Two-pass intake agent using Gemini:
+ * Pass 1: Transcribe all ticket text verbatim (at full resolution, no downscaling)
+ * Pass 2: Extract structured fields from the transcript into strict JSON (temperature 0)
  */
 export async function runIntakeAgent(
   imageBuffer: Buffer,
   mimeType: string,
   signedInUser: { id: string; name: string; registerNo: string }
 ): Promise<IntakeResult> {
-  const userId = signedInUser.id;
+  const modelName = getGeminiModelName();
+  let genAI;
 
-  // 1. Initial agent event
-  await logAgentEvent(
-    userId,
-    `Analyzing uploaded NPTEL hall ticket for ${signedInUser.name}...`,
-    "running"
-  );
+  try {
+    genAI = getGeminiClient();
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || "Gemini API client not configured. Missing GEMINI_API_KEY.",
+    };
+  }
 
   const isSvg =
     mimeType.includes("svg") ||
     imageBuffer.subarray(0, 100).toString("utf-8").includes("<svg");
 
-  // Fast path for SVG tickets
-  if (isSvg) {
-    const svgStr = imageBuffer.toString("utf-8");
-    const svgData = extractFromSvgText(svgStr);
+  let transcript = "";
 
-    if (svgData && svgData.registerNo) {
-      const extractedReg = svgData.registerNo.toUpperCase().trim();
-      const expectedReg = signedInUser.registerNo.toUpperCase().trim();
+  // -------------------------------------------------------------
+  // PASS 1: Verbatim Transcription
+  // -------------------------------------------------------------
+  try {
+    const pass1Model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: {
+        temperature: 0,
+      },
+    });
 
-      // Verification Check: Reject ticket if register number doesn't match signed-in student
-      if (extractedReg !== expectedReg) {
-        const reason = `Ticket register number (${extractedReg}) does not match your signed-in Karunya account (${expectedReg}).`;
-        await logAgentEvent(userId, `Verification rejected: ${reason}`, "failed");
-        return {
-          success: false,
-          isMismatch: true,
-          mismatchReason: reason,
-        };
-      }
+    const pass1Prompt = `You are an expert OCR transcription agent.
+Transcribe ALL visible text on this NPTEL hall ticket verbatim, line by line.
+Preserve all candidate names, register/roll numbers, course titles, course codes, exam dates, session timings, and center names/addresses exactly as written.
+Do not summarize. Do not skip any lines.`;
 
-      const canonicalCenter = matchToCanonicalCenter(
-        svgData.examCenter || "iON Digital Zone"
-      );
-      const session = svgData.session || "Forenoon";
+    let pass1Result;
 
-      const extracted: ExtractedTicket = {
-        name: svgData.name || signedInUser.name,
-        registerNo: extractedReg,
-        courseName: svgData.courseName || "Cloud Computing and Distributed Systems",
-        courseCode: "noc24-cs101",
-        examCenter: svgData.examCenter || canonicalCenter.name,
-        canonicalCenter,
-        city: "Coimbatore",
-        examDate: svgData.examDate || DEFAULT_EXAM_DATE,
-        session,
-        reportingTime: session === "Forenoon" ? "07:30 AM" : "12:30 PM",
-        gateCloses: session === "Forenoon" ? "08:45 AM" : "01:45 PM",
-        rawJson: svgData,
-      };
-
-      await logAgentEvent(
-        userId,
-        `Extracted hall ticket for ${extracted.name} (${extracted.registerNo}) at ${canonicalCenter.shortName} (${session}).`,
-        "done"
-      );
-
-      return {
-        success: true,
-        extracted,
-        fallbackUsed: false,
-      };
-    }
-  }
-
-  // Vision pipeline for PNG / JPG / Raster uploads
-  const base64Data = imageBuffer.toString("base64");
-
-  const prompt = `You are the ExamBuddy Intake Agent for Karunya University students taking NPTEL exams.
-Analyze this NPTEL hall ticket image carefully and extract the following details into strict JSON format with no markdown formatting around it:
-{
-  "name": "Student Full Name",
-  "registerNo": "Register number / Roll number (e.g., URK22CS1001)",
-  "courseName": "Full NPTEL course title",
-  "courseCode": "Course code (e.g. noc24-cs101)",
-  "examCenter": "Name and address of exam center / venue",
-  "city": "City name (e.g. Coimbatore)",
-  "examDate": "Exam date in YYYY-MM-DD format (if ambiguous use 2026-11-15)",
-  "session": "Forenoon" or "Afternoon",
-  "reportingTime": "Reporting time (e.g. 07:30 AM or 12:30 PM)",
-  "gateCloses": "Gate closure time (e.g. 08:45 AM or 01:45 PM)"
-}
-Return ONLY the JSON object.`;
-
-  let responseText = "";
-  let attempt = 0;
-  const maxRetries = 2;
-  const modelName = getGeminiModelName();
-
-  while (attempt <= maxRetries) {
-    try {
-      const genAI = getGeminiClient();
-      const model = genAI.getGenerativeModel({ model: modelName });
-
-      const result = await model.generateContent([
-        prompt,
+    if (isSvg) {
+      // Pass the SVG document text directly
+      const svgText = imageBuffer.toString("utf-8");
+      pass1Result = await pass1Model.generateContent([
+        pass1Prompt,
+        `\n\nHall Ticket SVG Document:\n${svgText}`,
+      ]);
+    } else {
+      // Send original raster image at full resolution (no downscaling or heavy compression)
+      pass1Result = await pass1Model.generateContent([
+        pass1Prompt,
         {
           inlineData: {
-            data: base64Data,
+            data: imageBuffer.toString("base64"),
             mimeType: mimeType || "image/png",
           },
         },
       ]);
-
-      const response = await result.response;
-      responseText = response.text();
-      if (responseText) break;
-    } catch (err: unknown) {
-      attempt++;
-      console.warn(`Intake Agent Gemini attempt ${attempt} failed:`, err);
-      if (attempt > maxRetries) {
-        await logAgentEvent(
-          userId,
-          "Vision model timed out or encountered an error. Falling back to manual confirmation form.",
-          "failed"
-        );
-        return createFallbackResult(signedInUser);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
+
+    transcript = (await pass1Result.response).text() || "";
+  } catch (err: any) {
+    console.error("Intake Pass 1 failed:", err);
+    const msg = err.message || String(err);
+    if (msg.includes("404") || msg.includes("not found") || msg.includes("is not found")) {
+      return {
+        success: false,
+        error: `Gemini model error: Model "${modelName}" was not found (404). Please verify GEMINI_MODEL in .env.local.`,
+      };
+    }
+    return {
+      success: false,
+      error: `Gemini transcription failed: ${msg}`,
+    };
   }
 
-  // Parse JSON response
+  // -------------------------------------------------------------
+  // PASS 2: Structured JSON Extraction from Transcript
+  // -------------------------------------------------------------
+  let rawJson: Record<string, any> | null = null;
   try {
-    const cleanJson = responseText
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    const pass2Model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            name: { type: SchemaType.STRING, nullable: true },
+            registerNumber: { type: SchemaType.STRING, nullable: true },
+            courseName: { type: SchemaType.STRING, nullable: true },
+            courseCode: { type: SchemaType.STRING, nullable: true },
+            examCenter: { type: SchemaType.STRING, nullable: true },
+            examDate: { type: SchemaType.STRING, nullable: true },
+            session: { type: SchemaType.STRING, nullable: true },
+          },
+          required: [
+            "name",
+            "registerNumber",
+            "courseName",
+            "courseCode",
+            "examCenter",
+            "examDate",
+            "session",
+          ],
+        },
+        temperature: 0,
+      },
+    });
 
-    const parsed = JSON.parse(cleanJson);
+    const pass2Prompt = `You are the ExamBuddy Extraction Agent for Karunya University students taking NPTEL exams.
+Given the following verbatim transcript of an NPTEL hall ticket, extract the structured fields.
 
-    const rawSession = String(parsed.session || "").toLowerCase();
-    const session: "Forenoon" | "Afternoon" =
-      rawSession.includes("after") || rawSession.includes("02") || rawSession.includes("pm")
-        ? "Afternoon"
-        : "Forenoon";
+Rules:
+1. Extract:
+   - "name": student candidate full name, or null if not readable.
+   - "registerNumber": student register/roll number (e.g. URK22CS1001), or null if not readable.
+   - "courseName": full NPTEL course title, or null if not readable.
+   - "courseCode": course code (e.g. noc24-cs101), or null if not readable.
+   - "examCenter": full name and address/city of assigned exam center venue, or null if not readable.
+   - "examDate": exam date normalized to ISO "YYYY-MM-DD" format (e.g. 2026-11-15), or null if not readable.
+   - "session": either "forenoon" or "afternoon" (map 9:00 AM or FN to "forenoon", 2:00 PM or AN to "afternoon"), or null if not readable.
+2. If any field cannot be read with confidence from the transcript, return null for that field. Never guess or hallucinate.
 
-    const canonicalCenter = matchToCanonicalCenter(parsed.examCenter || "");
+Transcript:
+${transcript}`;
 
-    const extracted: ExtractedTicket = {
-      name: parsed.name || signedInUser.name,
-      registerNo: (parsed.registerNo || signedInUser.registerNo).toUpperCase().trim(),
-      courseName: parsed.courseName || "NPTEL Certified Course",
-      courseCode: parsed.courseCode || "noc24-cs101",
-      examCenter: parsed.examCenter || canonicalCenter.name,
-      canonicalCenter,
-      city: parsed.city || "Coimbatore",
-      examDate: parsed.examDate || DEFAULT_EXAM_DATE,
-      session,
-      reportingTime:
-        parsed.reportingTime || (session === "Forenoon" ? "07:30 AM" : "12:30 PM"),
-      gateCloses:
-        parsed.gateCloses || (session === "Forenoon" ? "08:45 AM" : "01:45 PM"),
-      rawJson: parsed,
+    const pass2Result = await pass2Model.generateContent(pass2Prompt);
+    const pass2Text = (await pass2Result.response).text();
+
+    try {
+      rawJson = JSON.parse(pass2Text);
+    } catch {
+      const clean = pass2Text.replace(/```json/g, "").replace(/```/g, "").trim();
+      rawJson = JSON.parse(clean);
+    }
+  } catch (err: any) {
+    console.error("Intake Pass 2 failed:", err);
+    return {
+      success: false,
+      rawTranscript: transcript,
+      error: `Gemini field extraction failed: ${err.message || String(err)}`,
     };
+  }
 
-    // Verification Check: Reject ticket if register number doesn't match signed-in student
-    const expectedReg = signedInUser.registerNo.toUpperCase().trim();
-    const extractedReg = extracted.registerNo;
+  if (!rawJson) {
+    return {
+      success: false,
+      rawTranscript: transcript,
+      error: "Model returned empty response for structured fields.",
+    };
+  }
 
+  // Normalize extracted values
+  const name = rawJson.name ? String(rawJson.name).trim() : null;
+  const registerNumber = rawJson.registerNumber
+    ? String(rawJson.registerNumber).trim().toUpperCase()
+    : null;
+  const courseName = rawJson.courseName ? String(rawJson.courseName).trim() : null;
+  const courseCode = rawJson.courseCode ? String(rawJson.courseCode).trim() : null;
+  const examCenter = rawJson.examCenter ? String(rawJson.examCenter).trim() : null;
+  const examDate = normalizeDateToIso(rawJson.examDate);
+  const session = normalizeSession(rawJson.session);
+
+  const canonicalCenter = examCenter ? matchToCanonicalCenter(examCenter) : null;
+
+  // Cross-check register number if readable
+  if (registerNumber && signedInUser?.registerNo) {
+    const cleanExpected = signedInUser.registerNo.toUpperCase().trim();
     if (
-      extractedReg &&
-      extractedReg !== expectedReg &&
-      !extractedReg.includes(expectedReg) &&
-      !expectedReg.includes(extractedReg)
+      registerNumber !== cleanExpected &&
+      !registerNumber.includes(cleanExpected) &&
+      !cleanExpected.includes(registerNumber)
     ) {
-      const reason = `Ticket register number (${extractedReg}) does not match your signed-in Karunya account (${expectedReg}).`;
-      await logAgentEvent(userId, `Verification rejected: ${reason}`, "failed");
       return {
         success: false,
         isMismatch: true,
-        mismatchReason: reason,
-        extracted,
+        mismatchReason: `Ticket register number (${registerNumber}) does not match your signed-in Karunya account (${cleanExpected}).`,
+        rawTranscript: transcript,
+        rawJson,
+        extracted: {
+          name,
+          registerNumber,
+          courseName,
+          courseCode,
+          examCenter,
+          canonicalCenter,
+          examDate,
+          session,
+        },
       };
     }
-
-    await logAgentEvent(
-      userId,
-      `Extracted hall ticket for ${extracted.name} (${extracted.registerNo}) at ${canonicalCenter.shortName} (${session}).`,
-      "done"
-    );
-
-    return {
-      success: true,
-      extracted,
-      fallbackUsed: false,
-    };
-  } catch (parseError) {
-    console.error("Failed to parse Gemini output:", parseError, responseText);
-    await logAgentEvent(
-      userId,
-      "Extraction format issue; provided editable form with detected fields.",
-      "done"
-    );
-    return createFallbackResult(signedInUser);
   }
-}
 
-/**
- * Fallback when model is unavailable or fails to parse
- */
-function createFallbackResult(signedInUser: {
-  name: string;
-  registerNo: string;
-}): IntakeResult {
-  const canonicalCenter = matchToCanonicalCenter("iON Digital Zone");
   return {
     success: true,
-    fallbackUsed: true,
+    rawTranscript: transcript,
+    rawJson,
     extracted: {
-      name: signedInUser.name,
-      registerNo: signedInUser.registerNo,
-      courseName: "Cloud Computing and Distributed Systems",
-      courseCode: "noc24-cs101",
-      examCenter: canonicalCenter.name,
+      name,
+      registerNumber,
+      courseName,
+      courseCode,
+      examCenter,
       canonicalCenter,
-      city: "Coimbatore",
-      examDate: DEFAULT_EXAM_DATE,
-      session: "Forenoon",
-      reportingTime: "07:30 AM",
-      gateCloses: "08:45 AM",
+      examDate,
+      session,
     },
   };
 }

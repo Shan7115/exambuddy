@@ -71,7 +71,7 @@ async function handleReset(request: Request) {
       .delete()
       .filter("user_id", "not.in", `(${dummyIds.join(",")})`);
 
-    // Reset group metadata & costs
+    // Reset group metadata
     await supabase.from("groups").upsert([
       {
         id: groupAId,
@@ -80,8 +80,6 @@ async function handleReset(request: Request) {
         session: "Forenoon",
         meetup_point: "Karunya Nagar Main Bus Stop / Campus Gate",
         meetup_time: "06:45 AM",
-        transport: "Shared Maxi Cab / Tempo Traveller",
-        est_total_cost: 1600.0,
       },
       {
         id: groupBId,
@@ -90,8 +88,6 @@ async function handleReset(request: Request) {
         session: "Afternoon",
         meetup_point: "Gandhipuram Central Bus Stand (Platform 3)",
         meetup_time: "11:45 AM",
-        transport: "Pre-booked 7-Seater Cab (Innova)",
-        est_total_cost: 1200.0,
       },
     ]);
 
@@ -106,13 +102,6 @@ async function handleReset(request: Request) {
     }));
 
     await supabase.from("group_members").upsert([...membersA, ...membersB]);
-
-    // Log reset event
-    await supabase.from("agent_events").insert({
-      agent: "Coordinator agent",
-      message: "Demo environment reset: non-demo users cleared, 10 Karunya students restored.",
-      status: "done",
-    });
 
     return NextResponse.json({
       success: true,

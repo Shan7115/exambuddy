@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getAdminSupabase } from "@/lib/supabase/admin";
-import { CANONICAL_EXAM_CENTERS } from "@/lib/constants/demo-data";
 import { matchToCanonicalCenter } from "@/lib/agents/center-matcher";
 
 export async function GET() {
@@ -29,99 +28,118 @@ export async function GET() {
       .limit(1)
       .maybeSingle();
 
-    let group = null;
-    let members: Array<{
+    let currentGroup: any = null;
+    let centerStudents: Array<{ id: string; firstName: string; pickupArea: string }> = [];
+    let openGroups: Array<{
       id: string;
-      firstName: string;
-      pickupArea: string;
-      isCurrentUser: boolean;
+      meetupPoint: string | null;
+      meetupTime: string | null;
+      memberCount: number;
+      members: Array<{ firstName: string; pickupArea: string }>;
     }> = [];
-    let perPersonCost = 0;
 
-    // 3. If student has a ticket, look for group membership
-    if (ticket) {
-      const canonical = matchToCanonicalCenter(ticket.exam_center);
+    // 3. Check if user is currently an explicit member of any travel group
+    const { data: membership } = await supabase
+      .from("group_members")
+      .select("group_id, groups(*)")
+      .eq("user_id", session.userId)
+      .order("joined_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      // Check which group this user belongs to
-      const { data: membership } = await supabase
+    if (membership && membership.groups) {
+      const g = membership.groups as any;
+      const { data: memberRows } = await supabase
         .from("group_members")
-        .select("group_id")
-        .eq("user_id", session.userId)
-        .order("joined_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .select("user_id, users(id, name, pickup_area)")
+        .eq("group_id", g.id)
+        .order("joined_at", { ascending: true });
 
-      let targetGroupId = membership?.group_id;
+      const members = (memberRows || []).map((row: any) => {
+        const u = row.users;
+        const fullName = u?.name || "Student";
+        return {
+          id: u?.id || row.user_id,
+          firstName: fullName.split(" ")[0],
+          pickupArea: u?.pickup_area || "Karunya Nagar",
+          isCurrentUser: (u?.id || row.user_id) === session.userId,
+        };
+      });
 
-      // If not yet joined, look for existing group matching center, date, session
-      if (!targetGroupId) {
-        const { data: matchingGroup } = await supabase
-          .from("groups")
-          .select("id")
-          .eq("exam_center", canonical.name)
-          .eq("exam_date", ticket.exam_date)
-          .eq("session", ticket.session)
-          .maybeSingle();
-
-        if (matchingGroup) {
-          targetGroupId = matchingGroup.id;
-        }
-      }
-
-      if (targetGroupId) {
-        const { data: groupData } = await supabase
-          .from("groups")
-          .select("*")
-          .eq("id", targetGroupId)
-          .single();
-
-        if (groupData) {
-          // Fetch members
-          const { data: memberRows } = await supabase
-            .from("group_members")
-            .select("user_id, joined_at, users(id, name, pickup_area)")
-            .eq("group_id", targetGroupId)
-            .order("joined_at", { ascending: true });
-
-          members = (memberRows || []).map((row: any) => {
-            const u = row.users;
-            const fullName = u?.name || "Student";
-            const firstName = fullName.split(" ")[0];
-            return {
-              id: u?.id || row.user_id,
-              firstName,
-              pickupArea: u?.pickup_area || "Karunya Nagar",
-              isCurrentUser: u?.id === session.userId,
-            };
-          });
-
-          const totalCost = Number(groupData.est_total_cost) || 1200;
-          perPersonCost = members.length > 0 ? Math.round(totalCost / members.length) : totalCost;
-
-          group = {
-            ...groupData,
-            canonicalCenter: canonical,
-            perPersonCost,
-            memberCount: members.length,
-          };
-        }
-      }
+      currentGroup = {
+        id: g.id,
+        examCenter: g.exam_center,
+        examDate: g.exam_date,
+        session: g.session,
+        meetupPoint: g.meetup_point || null,
+        meetupTime: g.meetup_time || null,
+        members,
+        memberCount: members.length,
+      };
     }
 
-    // 4. Fetch recent agent events for this user and their group
-    const { data: events } = await supabase
-      .from("agent_events")
-      .select("id, agent, message, status, created_at, group_id")
-      .or(`user_id.eq.${session.userId}${group?.id ? `,group_id.eq.${group.id}` : ""}`)
-      .order("created_at", { ascending: false })
-      .limit(15);
+    // 4. If user has a ticket, fetch classmates going to the same center, date, session
+    if (ticket) {
+      const canonical = matchToCanonicalCenter(ticket.exam_center);
+      const ticketSession =
+        ticket.session.toLowerCase().includes("after") ? "Afternoon" : "Forenoon";
+
+      // Query tickets for the same center, date, session
+      const { data: matchingTickets } = await supabase
+        .from("tickets")
+        .select("user_id, users(id, name, pickup_area)")
+        .eq("exam_center", canonical.name)
+        .eq("exam_date", ticket.exam_date)
+        .eq("session", ticketSession);
+
+      if (matchingTickets) {
+        const seenIds = new Set<string>();
+        for (const t of matchingTickets) {
+          const u = (t as any).users;
+          if (u && u.id !== session.userId && !seenIds.has(u.id)) {
+            seenIds.add(u.id);
+            centerStudents.push({
+              id: u.id,
+              firstName: (u.name || "Student").split(" ")[0],
+              pickupArea: u.pickup_area || "Karunya Nagar",
+            });
+          }
+        }
+      }
+
+      // Query open groups for this center, date, session
+      const { data: groupRows } = await supabase
+        .from("groups")
+        .select("id, meetup_point, meetup_time, group_members(user_id, users(name, pickup_area))")
+        .eq("exam_center", canonical.name)
+        .eq("exam_date", ticket.exam_date)
+        .eq("session", ticketSession);
+
+      if (groupRows) {
+        openGroups = groupRows.map((gr: any) => {
+          const gmList = gr.group_members || [];
+          const membersList = gmList.map((gm: any) => ({
+            firstName: (gm.users?.name || "Student").split(" ")[0],
+            pickupArea: gm.users?.pickup_area || "Karunya Nagar",
+          }));
+
+          return {
+            id: gr.id,
+            meetupPoint: gr.meetup_point || null,
+            meetupTime: gr.meetup_time || null,
+            memberCount: membersList.length,
+            members: membersList,
+          };
+        });
+      }
+    }
 
     return NextResponse.json({
       user: dbUser || session,
       ticket,
-      group,
-      members,
-      agentEvents: events || [],
+      currentGroup,
+      centerStudents,
+      openGroups,
     });
   } catch (error) {
     console.error("Dashboard error:", error);

@@ -44,15 +44,12 @@ export function Navbar({ user, onOpenSignIn, onSignOut, onResetComplete }: Navba
             <Link href="/dashboard" className="hover:text-[#1D1D1F] transition-colors">
               My Trip
             </Link>
+            <Link href="/explore" className="hover:text-[#1D1D1F] transition-colors">
+              Explore Travel
+            </Link>
             <Link href="/upload" className="hover:text-[#1D1D1F] transition-colors">
               Upload Ticket
             </Link>
-            <Link href="/activity" className="hover:text-[#1D1D1F] transition-colors">
-              Agent Activity
-            </Link>
-            <a href="/#centers" className="hover:text-[#1D1D1F] transition-colors">
-              Exam Centers
-            </a>
           </nav>
 
           {/* Right CTA */}

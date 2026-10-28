@@ -13,13 +13,13 @@ export async function POST(
     }
 
     const { id: groupId } = await params;
-    await postTripReminder(groupId);
+    const summary = await postTripReminder(groupId);
 
-    return NextResponse.json({ success: true, message: "Reminder posted to group." });
-  } catch (error) {
+    return NextResponse.json({ success: true, summary });
+  } catch (error: any) {
     console.error("Reminder route error:", error);
     return NextResponse.json(
-      { error: "Failed to generate coordinator reminder." },
+      { error: error.message || "Failed to post reminder summary." },
       { status: 500 }
     );
   }

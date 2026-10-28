@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getAdminSupabase } from "@/lib/supabase/admin";
-import { runMatchingAgent } from "@/lib/agents/matching-agent";
+import { matchToCanonicalCenter } from "@/lib/agents/center-matcher";
 
 export async function POST() {
   try {
@@ -12,7 +12,7 @@ export async function POST() {
 
     const supabase = getAdminSupabase();
 
-    // 1. Fetch student's confirmed ticket
+    // Fetch student's confirmed ticket
     const { data: ticket, error: ticketErr } = await supabase
       .from("tickets")
       .select("id, exam_center, exam_date, session, course_name")
@@ -28,22 +28,34 @@ export async function POST() {
       );
     }
 
-    // 2. Run Matching Agent
-    const matchingResult = await runMatchingAgent(user.userId, {
-      exam_center: ticket.exam_center,
-      exam_date: ticket.exam_date,
-      session: ticket.session as "Forenoon" | "Afternoon",
-    });
+    const canonical = matchToCanonicalCenter(ticket.exam_center);
+
+    // Return matching classmates going to the same center, date, session (Opt-in only, no auto group creation)
+    const { data: matchingTickets } = await supabase
+      .from("tickets")
+      .select("user_id, users(id, name, pickup_area)")
+      .eq("exam_center", canonical.name)
+      .eq("exam_date", ticket.exam_date)
+      .eq("session", ticket.session);
+
+    const centerStudents = (matchingTickets || [])
+      .filter((t: any) => t.users && t.users.id !== user.userId)
+      .map((t: any) => ({
+        id: t.users.id,
+        firstName: (t.users.name || "Student").split(" ")[0],
+        pickupArea: t.users.pickup_area || "Karunya Nagar",
+      }));
 
     return NextResponse.json({
       success: true,
       ticket,
-      group: matchingResult,
+      centerStudents,
+      canonicalCenter: canonical,
     });
   } catch (error) {
     console.error("Match route error:", error);
     return NextResponse.json(
-      { error: "Failed to run matching agent. Please try again." },
+      { error: "Failed to fetch matching classmates." },
       { status: 500 }
     );
   }

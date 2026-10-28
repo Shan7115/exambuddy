@@ -13,9 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
-  SAMPLE_PRESENTERS,
   COIMBATORE_PICKUP_AREAS,
-  type SamplePresenter,
 } from "@/lib/constants/demo-data";
 import type { SessionUser } from "@/lib/auth/session";
 
@@ -42,15 +40,6 @@ export function SignInSheet({ isOpen, onClose, onSuccess }: SignInSheetProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
-
-  // Quick fill preset presenter
-  const handleSelectPresenter = (p: SamplePresenter) => {
-    setName(p.name);
-    setRegisterNo(p.registerNo);
-    setEmail(p.email);
-    setPickupArea(p.pickupArea);
-    setErrorMessage(null);
-  };
 
   // Submit Step 1: Send OTP
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -205,42 +194,6 @@ export function SignInSheet({ isOpen, onClose, onSuccess }: SignInSheetProps) {
 
             {/* Scrollable Content */}
             <div className="p-6 overflow-y-auto space-y-5">
-              {/* Quick Presenter Presets for 4-device live presentation */}
-              {step === "form" && (
-                <div className="bg-[#F5F5F7] rounded-2xl p-3.5 border border-[#D2D2D7]/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[12px] font-medium text-[#6E6E73] flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#0071E3]" />
-                      Live demo presenter presets (tap to fill):
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {SAMPLE_PRESENTERS.map((p, idx) => (
-                      <button
-                        key={p.registerNo}
-                        type="button"
-                        onClick={() => handleSelectPresenter(p)}
-                        className={`text-left p-2 rounded-xl text-[12px] border transition-all ${
-                          registerNo === p.registerNo
-                            ? "bg-[#0071E3] text-white border-[#0071E3]"
-                            : "bg-white hover:bg-white/90 text-[#1D1D1F] border-[#D2D2D7]/60"
-                        }`}
-                      >
-                        <div className="font-semibold truncate">
-                          P{idx + 1}: {p.name}
-                        </div>
-                        <div
-                          className={`text-[11px] truncate ${
-                            registerNo === p.registerNo ? "text-white/80" : "text-[#6E6E73]"
-                          }`}
-                        >
-                          {p.registerNo} • {p.pickupArea.split(" ")[0]}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Error Alert */}
               {errorMessage && (

@@ -15,9 +15,8 @@ export function getGeminiClient(): GoogleGenerativeAI {
 
 export function getGeminiModelName(): string {
   const envModel = process.env.GEMINI_MODEL?.trim();
-  // Valid Gemini flash models: gemini-1.5-flash, gemini-2.0-flash
-  if (envModel === "gemini-2.0-flash" || envModel === "gemini-1.5-flash" || envModel === "gemini-1.5-pro") {
+  if (envModel) {
     return envModel;
   }
-  return "gemini-1.5-flash";
+  return "gemini-2.5-flash";
 }

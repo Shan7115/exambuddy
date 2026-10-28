@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getAdminSupabase } from "@/lib/supabase/admin";
-import { postTripReminder } from "@/lib/agents/coordinator-agent";
 
 export async function POST(
   request: Request,
@@ -23,7 +22,7 @@ export async function POST(
 
     const supabase = getAdminSupabase();
 
-    // 1. Insert student message
+    // Insert student message
     const { data: newMsg, error: insertErr } = await supabase
       .from("messages")
       .insert({
@@ -38,27 +37,6 @@ export async function POST(
     if (insertErr || !newMsg) {
       console.error("Failed to insert message:", insertErr);
       return NextResponse.json({ error: "Could not send message." }, { status: 500 });
-    }
-
-    const lower = text.toLowerCase();
-    // 2. Autonomous Coordinator Agent response if user asks for reminder/cost/plan
-    if (
-      lower.includes("remind") ||
-      lower.includes("summary") ||
-      lower.includes("checklist") ||
-      lower.includes("plan") ||
-      lower.includes("fare") ||
-      lower.includes("split") ||
-      lower.includes("@bot") ||
-      lower.includes("what time") ||
-      lower.includes("where")
-    ) {
-      // Async trigger coordinator bot reminder
-      setTimeout(() => {
-        postTripReminder(groupId).catch((err) =>
-          console.error("Bot reminder trigger failed:", err)
-        );
-      }, 500);
     }
 
     return NextResponse.json({

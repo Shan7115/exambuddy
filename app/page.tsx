@@ -12,12 +12,8 @@ import {
   Navigation,
   ArrowRight,
   Shield,
-  MapPin,
-  Clock,
-  Sparkles,
   RotateCcw,
 } from "lucide-react";
-import { CANONICAL_EXAM_CENTERS, SAMPLE_PRESENTERS } from "@/lib/constants/demo-data";
 import type { SessionUser } from "@/lib/auth/session";
 
 export default function LandingPage() {
@@ -82,7 +78,7 @@ export default function LandingPage() {
 
           {/* One-line subhead (body 17px, line length < 70 chars) */}
           <p className="mt-5 text-[17px] sm:text-[19px] leading-[1.45] text-[#6E6E73] max-w-[620px] font-normal">
-            Match with Karunya classmates headed to your exam center, coordinate the journey, and split the ride effortlessly.
+            Match with Karunya classmates headed to your exam center and coordinate the journey together effortlessly.
           </p>
 
           {/* Primary & Secondary Actions */}
@@ -120,11 +116,11 @@ export default function LandingPage() {
                 Three simple steps. Zero travel stress.
               </h2>
               <p className="mt-3 text-[17px] text-[#6E6E73] leading-relaxed">
-                Autonomous agents coordinate your schedule, route, and cab fare so you can focus on your exam.
+                Coordinate your schedule and meetup details so you can focus on your exam.
               </p>
             </div>
 
-            {/* Clean 3-step sequence (no generic card grid, varied depth) */}
+            {/* Clean 3-step sequence */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
               {/* Step 1 */}
               <div className="bg-white rounded-3xl p-7 border border-[#D2D2D7]/60 shadow-xs flex flex-col justify-between">
@@ -157,14 +153,14 @@ export default function LandingPage() {
                     Step 2
                   </div>
                   <h3 className="text-[20px] font-semibold tracking-tight text-[#1D1D1F] mb-2.5">
-                    Meet classmates on your route
+                    See classmates at your center
                   </h3>
                   <p className="text-[15px] leading-relaxed text-[#6E6E73]">
-                    The matching agent links you with verified Karunya peers traveling to the same center at the same time.
+                    View peers traveling to the same exam center and session, and choose to start or join a travel group.
                   </p>
                 </div>
                 <div className="mt-6 pt-4 border-t border-[#D2D2D7]/40 text-[12px] font-medium text-[#0071E3]">
-                  Exact center and session pairing
+                  Exact center and session matching
                 </div>
               </div>
 
@@ -181,11 +177,11 @@ export default function LandingPage() {
                     Plan the trip together
                   </h3>
                   <p className="text-[15px] leading-relaxed text-[#6E6E73]">
-                    The coordinator agent suggests the campus pickup spot, departure time, and live per-person cost split.
+                    Coordinate your meetup point and departure time with your travel group members in live chat.
                   </p>
                 </div>
                 <div className="mt-6 pt-4 border-t border-[#D2D2D7]/40 text-[12px] font-medium text-[#0071E3]">
-                  Live split updates as members join
+                  Live chat with group members
                 </div>
               </div>
             </div>
@@ -198,109 +194,6 @@ export default function LandingPage() {
                   Built exclusively for Karunya Institute of Technology and Sciences students with a verified @karunya.edu.in email.
                 </span>
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* CANONICAL EXAM CENTERS SECTION */}
-        <section id="centers" className="py-20 px-4 sm:px-6 max-w-5xl mx-auto w-full">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-[32px] sm:text-[40px] font-semibold tracking-[-0.02em] text-[#1D1D1F]">
-              Supported Coimbatore NPTEL centers
-            </h2>
-            <p className="mt-3 text-[17px] text-[#6E6E73]">
-              Pre-configured canonical venues for Karunya students with route distances.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {CANONICAL_EXAM_CENTERS.map((center, index) => (
-              <div
-                key={center.id}
-                className="bg-white rounded-2xl p-5 sm:p-6 border border-[#D2D2D7]/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#F5F5F7] text-[#0071E3] flex items-center justify-center shrink-0 mt-0.5">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-semibold text-[#0071E3] uppercase tracking-wider">
-                        Center {String.fromCharCode(65 + index)}
-                      </span>
-                    </div>
-                    <h3 className="text-[18px] font-semibold text-[#1D1D1F] mt-0.5">
-                      {center.name}
-                    </h3>
-                    <p className="text-[14px] text-[#6E6E73] mt-1 max-w-xl">
-                      {center.address}
-                    </p>
-                  </div>
-                </div>
-
-                <a
-                  href={center.googleMapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-[14px] font-medium text-[#0071E3] hover:text-[#0077ED] self-start sm:self-center shrink-0 min-h-[44px]"
-                >
-                  View on Google Maps
-                  <ArrowRight className="w-4 h-4" />
-                </a>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* DEMO PRESENTERS GUIDE (For 4-device presentation) */}
-        <section
-          id="demo-presenters"
-          className="bg-[#F5F5F7] py-16 px-4 sm:px-6 border-t border-[#D2D2D7]/50"
-        >
-          <div className="max-w-5xl mx-auto">
-            <div className="flex items-center gap-2.5 mb-2">
-              <Sparkles className="w-4 h-4 text-[#0071E3]" />
-              <span className="text-[13px] font-semibold text-[#0071E3] uppercase tracking-wider">
-                Live Demo Guide
-              </span>
-            </div>
-            <h2 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-[#1D1D1F] mb-3">
-              Configured for four simultaneous presenter devices
-            </h2>
-            <p className="text-[15px] text-[#6E6E73] max-w-2xl mb-8 leading-relaxed">
-              When presenting live across four phones or laptops, use the presenter credentials below. Presenters 1, 2, and 3 match into the Center A squad, while Presenter 4 joins the Center B afternoon squad.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {SAMPLE_PRESENTERS.map((p, idx) => (
-                <div
-                  key={p.registerNo}
-                  className="bg-white rounded-2xl p-4 border border-[#D2D2D7]/60 shadow-xs flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="px-2 py-0.5 rounded-full bg-[#0071E3]/10 text-[#0071E3] text-[11px] font-semibold">
-                        Device {idx + 1}
-                      </span>
-                      <span className="text-[11px] font-medium text-[#6E6E73]">
-                        {p.session}
-                      </span>
-                    </div>
-                    <div className="font-semibold text-[15px] text-[#1D1D1F]">
-                      {p.name}
-                    </div>
-                    <div className="font-mono text-[12px] text-[#6E6E73] mt-0.5">
-                      {p.registerNo}
-                    </div>
-                    <div className="text-[12px] text-[#6E6E73] mt-2 truncate">
-                      📍 {p.pickupArea}
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-[#D2D2D7]/40 text-[11px] font-medium text-[#1D1D1F] truncate">
-                    {idx < 3 ? "Matches Center A Group" : "Matches Center B Group"}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </section>

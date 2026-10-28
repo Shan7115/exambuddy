@@ -69,14 +69,6 @@ export async function POST(request: Request) {
       ticketId = data.id;
     }
 
-    // Log confirmation agent event
-    await supabase.from("agent_events").insert({
-      user_id: user.userId,
-      agent: "Intake agent",
-      message: `Hall ticket confirmed for ${canonicalCenter.shortName} (${normalizedSession}). Ready for classmate matching.`,
-      status: "done",
-    });
-
     return NextResponse.json({
       success: true,
       ticketId,
